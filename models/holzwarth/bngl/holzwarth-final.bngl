@@ -1,0 +1,46 @@
+begin model
+begin parameters
+  deex_flu     670e5  # de-excitation (fluorescence)
+  deex_heat      2e5  # de-excitation (heat) 
+  ch_re        50e10  # Charge recombination 
+  ch_se        50e10  # Primary charge separation  
+  stab_gen     25e10  # ChlD1+ reduction by P680 
+  stab_re     6.7e10  # Reverse electron flow from ChlD1 to P680+  
+  qa_red     0.48e10  # Qa reduction by PhD1-  
+  qa_rev     0.24e10  # Reverse electron flow from Qa- to PhD1 
+  extrans    1.92e10  # Energy transfer between A and ChlD1  
+  extrans2    2.5e10  # Energy transfer between ChlD1 and A 
+end parameters
+begin molecule types
+  PSII(P680~n~p,Qa~n~m,PhD1~n~m,ac~n~exc,ChlD1~n~p~exc)
+end molecule types
+begin seed species
+  PSII(P680~n,Qa~n,PhD1~n,ac~exc,ChlD1~n)           1
+end seed species
+begin reaction rules
+  # Deexcitation - antenna:
+  PSII(ac~exc) -> PSII(ac~n)   deex_flu
+  PSII(ac~exc) -> PSII(ac~n)   deex_heat
+  # Deexcitation - ChlD1:
+  PSII(ChlD1~exc) -> PSII(ChlD1~n)   deex_flu
+  PSII(ChlD1~exc) -> PSII(ChlD1~n)   deex_heat
+  # Excitation Transfer:
+  PSII(ac~exc,ChlD1~n) <-> PSII(ac~n,ChlD1~exc)   extrans, extrans2
+  # Primary charge separation / recombination:
+  PSII(PhD1~m,ChlD1~p) <-> PSII(PhD1~n,ChlD1~exc)    ch_re, ch_se
+  # Stable pair generation:
+  PSII(P680~n,PhD1~m,ChlD1~p) <-> PSII(P680~p,PhD1~m,ChlD1~n)  \
+                                               stab_gen, stab_re
+  # Quinone Qa reduction:
+  PSII(P680~p,Qa~n,PhD1~m) <-> PSII(P680~p,Qa~m,PhD1~n)  \
+                                               qa_red, qa_rev
+end reaction rules
+begin observables
+  Molecules  Ant_exc   PSII(ac~exc) 
+  Molecules  ChlD_exc  PSII(ChlD1~exc) 
+end observables
+end model
+## actions ##
+generate_network({overwrite=>1})
+#simulate({method=>ode,t_start=>1e-12,t_end=>1e-6,n_steps=>50000})
+simulate({method=>ode,sample_times=>[1.00000000000000e-13, 1.17095000000000e-13, 1.37113000000000e-13, 1.60553000000000e-13, 1.88000000000000e-13, 2.20139000000000e-13, 2.57772000000000e-13, 3.01839000000000e-13, 3.53439000000000e-13, 4.13860000000000e-13, 4.84611000000000e-13, 5.67456000000000e-13, 6.64464000000000e-13, 7.78056000000000e-13, 9.11067000000000e-13, 1.06682000000000e-12, 1.24919000000000e-12, 1.46274000000000e-12, 1.71280000000000e-12, 2.00561000000000e-12, 2.34848000000000e-12, 2.74995000000000e-12, 3.22007000000000e-12, 3.77055000000000e-12, 4.41513000000000e-12, 5.16991000000000e-12, 6.05372000000000e-12, 7.08862000000000e-12, 8.30043000000000e-12, 9.71941000000000e-12, 1.13810000000000e-11, 1.33266000000000e-11, 1.56048000000000e-11, 1.82725000000000e-11, 2.13962000000000e-11, 2.50539000000000e-11, 2.93370000000000e-11, 3.43522000000000e-11, 4.02248000000000e-11, 4.71013000000000e-11, 5.51534000000000e-11, 6.45820000000000e-11, 7.56225000000000e-11, 8.85504000000000e-11, 1.03688000000000e-10, 1.21414000000000e-10, 1.42170000000000e-10, 1.66474000000000e-10, 1.94934000000000e-10, 2.28258000000000e-10, 2.67279000000000e-10, 3.12972000000000e-10, 3.66475000000000e-10, 4.29125000000000e-10, 5.02485000000000e-10, 5.88386000000000e-10, 6.88972000000000e-10, 8.06753000000000e-10, 9.44670000000000e-10, 1.10616000000000e-09, 1.29527000000000e-09, 1.51669000000000e-09, 1.77598000000000e-09, 2.07958000000000e-09, 2.43510000000000e-09, 2.85138000000000e-09, 3.33883000000000e-09, 3.90961000000000e-09, 4.57797000000000e-09, 5.36059000000000e-09, 6.27700000000000e-09, 7.35006000000000e-09, 8.60658000000000e-09, 1.00779000000000e-08, 1.18007000000000e-08, 1.38181000000000e-08, 1.61803000000000e-08, 1.89464000000000e-08, 2.21854000000000e-08, 2.59780000000000e-08, 3.04190000000000e-08, 3.56192000000000e-08, 4.17084000000000e-08, 4.88386000000000e-08, 5.71876000000000e-08, 6.69640000000000e-08, 7.84117000000000e-08, 9.18164000000000e-08, 1.07513000000000e-07, 1.25892000000000e-07, 1.47414000000000e-07, 1.72615000000000e-07, 2.02123000000000e-07, 2.36677000000000e-07, 2.77138000000000e-07, 3.24515000000000e-07, 3.79992000000000e-07, 4.44952000000000e-07, 5.21018000000000e-07, 6.10087000000000e-07 ]})

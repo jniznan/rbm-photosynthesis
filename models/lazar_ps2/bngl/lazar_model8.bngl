@@ -1,0 +1,71 @@
+begin model
+
+begin parameters
+    # Rate constants:
+	kL     4000   # 1/sec Charge separation rate, Lazar_2003
+	kRec  10000   # 1/sec Charge recombination rate, Lazar_2003
+	k01   20000   # 1/sec Electron donation from S0 to P680+ rate constant, Lazar_2003
+	k12   10000
+	k23    3330
+	k30    1000
+	kAB1   3500   # 1/sec Electron transport from Qa- to Qb, Lazar_2003
+	kAB2   1750   # 1/sec Electron transport from Qa- to Qb-, Lazar_2003
+	kBA1    175   # 1/sec Electron transport from Qb- to Qa, Lazar_2003
+	kBA2     35   # 1/sec Electron transport from Qb2- to Qa, Lazar_2003 
+	kfUnbind  500 
+	kbUnbind  500
+	kfBind  500 
+	kbBind  500
+	kOx      10
+	kRed     10
+end parameters
+
+begin molecule types
+	PSII(P680~n~p,Qa~n~m,S~0~1~2~3,Qb~red~non)
+	PQ(Qb~n~m~2m)
+end molecule types
+
+begin seed species
+    PSII(P680~n,Qa~n,S~1,Qb~red)       0.75
+    PSII(P680~n,Qa~n,S~1,Qb~non)       0.25
+	PQ(Qb~n)   2.5
+	PQ(Qb~2m)  2.5
+end seed species
+
+begin reaction rules
+	# Light induced charge separation between P680 and Qa and charge recombination:
+	PSII(P680~n,Qa~n) <-> PSII(P680~p,Qa~m)  kL, kRec
+	# Electron donation from S-states of OEC to P680+
+	PSII(P680~p,S~0) -> PSII(P680~n,S~1)  k01
+	PSII(P680~p,S~1) -> PSII(P680~n,S~2)  k12
+	PSII(P680~p,S~2) -> PSII(P680~n,S~3)  k23
+	PSII(P680~p,S~3) -> PSII(P680~n,S~0)  k30
+	# Electron transport from Qa- to Qb:
+	PSII(Qa~m,Qb~red!1).PQ(Qb~n!1) <-> PSII(Qa~n,Qb~red!1).PQ(Qb~m!1)   kAB1, kBA1
+	PSII(Qa~m,Qb~red!1).PQ(Qb~m!1) <-> PSII(Qa~n,Qb~red!1).PQ(Qb~2m!1)  kAB2, kBA2
+	# Exchange of doubly reduced Qb with oxidized PQ molecule from the PQ pool.
+	# by two subsequent reversible reactions:
+	PSII(Qb~red!1).PQ(Qb~2m!1) <-> PSII(Qb~red) + PQ(Qb~2m) kfUnbind, kbUnbind
+	PSII(Qb~red) + PQ(Qb~n) <-> PSII(Qb~red!1).PQ(Qb~n!1)   kfBind, kbBind
+# Reversible reoxidation of reduced PQ molecules from the PQ pool:
+	PQ(Qb~2m) <-> PQ(Qb~n)  kOx, kRed
+end reaction rules
+
+begin observables
+	Molecules    Qa_m    PSII(Qa~m)
+	Molecules    PQ      PQ(Qb~n)
+	Molecules    S2_P680_Qam_N          PSII(P680~n,Qa~m,S~2,Qb~non)
+	Molecules    S2_P680_Qam_Qb2m    PSII(P680~n,Qa~m,S~2,Qb~red!1).PQ(Qb~2m!1)
+	Molecules    S0_P680_Qam_Qb2m    PSII(P680~n,Qa~m,S~0,Qb~red!1).PQ(Qb~2m!1)
+end observables
+
+end model
+
+## actions ##
+# construct reaction network
+generate_network({overwrite=>1})
+
+#simulate({method=>ode,t_start=>1e-6,t_end=>1,n_steps=>5000})
+simulate({method=>ode,sample_times=>[1.00000000e-06,1.14975700e-06,1.32194115e-06,1.51991108e-06,1.74752840e-06,2.00923300e-06,2.31012970e-06,2.65608778e-06,3.05385551e-06,3.51119173e-06,4.03701726e-06,4.64158883e-06,5.33669923e-06,6.13590727e-06,7.05480231e-06,8.11130831e-06,9.32603347e-06,1.07226722e-05,1.23284674e-05,1.41747416e-05,1.62975083e-05,1.87381742e-05,2.15443469e-05,2.47707636e-05,2.84803587e-05,3.27454916e-05,3.76493581e-05,4.32876128e-05,4.97702356e-05,5.72236766e-05,6.57933225e-05,7.56463328e-05,8.69749003e-05,1.00000000e-04,1.14975700e-04,1.32194115e-04,1.51991108e-04,1.74752840e-04,2.00923300e-04,2.31012970e-04,2.65608778e-04,3.05385551e-04,3.51119173e-04,4.03701726e-04,4.64158883e-04,5.33669923e-04,6.13590727e-04,7.05480231e-04,8.11130831e-04,9.32603347e-04,1.07226722e-03,1.23284674e-03,1.41747416e-03,1.62975083e-03,1.87381742e-03,2.15443469e-03,2.47707636e-03,2.84803587e-03,3.27454916e-03,3.76493581e-03,4.32876128e-03,4.97702356e-03,5.72236766e-03,6.57933225e-03,7.56463328e-03,8.69749003e-03,1.00000000e-02,1.14975700e-02,1.32194115e-02,1.51991108e-02,1.74752840e-02,2.00923300e-02,2.31012970e-02,2.65608778e-02,3.05385551e-02,3.51119173e-02,4.03701726e-02,4.64158883e-02,5.33669923e-02,6.13590727e-02,7.05480231e-02,8.11130831e-02,9.32603347e-02,1.07226722e-01,1.23284674e-01,1.41747416e-01,1.62975083e-01,1.87381742e-01,2.15443469e-01,2.47707636e-01,2.84803587e-01,3.27454916e-01,3.76493581e-01,4.32876128e-01,4.97702356e-01,5.72236766e-01,6.57933225e-01,7.56463328e-01,8.69749003e-01,1.00000000e+00]})
+
+
