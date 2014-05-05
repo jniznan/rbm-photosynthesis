@@ -1,4 +1,5 @@
 from pysb import Model, Rule, bng
+from collections import defaultdict
 
 
 def search_model(model):
@@ -118,4 +119,23 @@ def dfs(model):
             if rn1 == rn2:
                 node = m2
                 break
-    return m1
+    return remove_duplicate_rules(m1)
+
+
+def remove_duplicate_rules(model):
+    m = Model(_export=False)
+    # add everything besides rules:
+    for comp in model.all_components():
+        if comp.__class__ is not Rule:
+            m.add_component(comp)
+    for ini in model.initial_conditions:
+        m.initial(*ini)
+    rule_map = defaultdict(list)
+    for rule in model.rules:
+        rid = repr(rule.rule_expression) + repr(rule.rate_forward) +\
+            repr(rule.rate_reverse)
+        rule_map[rid].append(rule)
+    for rules in rule_map.values():
+        r = min(rules, key=lambda r: (len(r.name), r.name))
+        m.add_component(r)
+    return m
