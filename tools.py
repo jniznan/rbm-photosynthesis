@@ -2,14 +2,14 @@ from pysb import Model, Rule, bng
 from collections import defaultdict, Counter
 
 
-def search_model(model):
+def search_model(model, sort_key=None):
     '''
     Yields all descsendants of a model. They are created by applying syntactic
     operations.
     '''
-    for m in context_enumeration_elimination(model):
+    for m in context_enumeration_elimination(model, sort_key):
         yield m
-    for m in context_elimination(model):
+    for m in context_elimination(model, sort_key):
         yield m
 
 
@@ -17,8 +17,7 @@ def merge_bidirectional(model):
     pass
 
 
-def context_enumeration_elimination(model):
-    sort_key = get_rule_sort_key(model)
+def context_enumeration_elimination(model, sort_key=None):
     grouped = _group_rules_by_context_and_changes(model.rules)
     for (_, _, diffs), group in grouped.items():
         mon = group[0].reactant_pattern.complex_patterns[0].\
@@ -101,11 +100,10 @@ def get_lh_rh(rule):
     return lh, rh
 
 
-def context_elimination(model):
+def context_elimination(model, sort_key=None):
     for i, rule in enumerate(model.rules):
         lh, rh = get_lh_rh(rule)
         mon = lh.monomer
-        sort_key = get_rule_sort_key(model)
         for site in lh.site_conditions.keys():
             if lh.site_conditions[site] == rh.site_conditions[site]:
                 # site does not change --> is context, try to remove it
@@ -186,6 +184,7 @@ def bfs(model):
     generate the same reaction network.
     '''
     # WARNING: takes looong time, finds all fix points
+    raise DeprecationWarning('Do not use bfs! It is slow')
     rn1 = parse_reaction_network(bng.generate_network(model))
 
     searched = set()
@@ -213,14 +212,16 @@ def dfs(model):
     Returns a model that cannot be further simplified by syntactic operations.
     '''
     # fast, finds one fix point
+    sort_key = get_rule_sort_key(model)
     rn1 = parse_reaction_network(bng.generate_network(model))
     node = model
     while node:
         m1 = node
         node = None
-        for edge, m2 in search_model(m1):
+        for edge, m2 in search_model(m1, sort_key=sort_key):
             rn2 = parse_reaction_network(bng.generate_network(m2))
             if rn1 == rn2:
+                print edge
                 node = m2
                 break
     return m1
