@@ -2,6 +2,10 @@ from pysb import Model, Rule, bng
 
 
 def search_model(model):
+    '''
+    Yields all descsendants of a model. They are created by applying syntactic
+    operations.
+    '''
     for i, rule in enumerate(model.rules):
         rexp = rule.rule_expression
         react = rexp.reactant_pattern.complex_patterns
@@ -38,6 +42,11 @@ def search_model(model):
 
 
 def parse_reaction_network(rn):
+    '''
+    Parses a BNGL-generated reaction network into a dict.
+    Useful because the ordering of species and reactions might be different
+    althoug the models are equivalent.
+    '''
     # ignore parameters for now
     lines = rn.split('\n')
     species = lines[lines.index('begin species') + 1:
@@ -58,10 +67,19 @@ def parse_reaction_network(rn):
 
 
 def rules(model):
+    '''
+    Return rules of the specified model sorted by their names.
+    Useful for canonic model representation.
+    '''
     return sorted([r for r in model.rules], key=lambda r: r.name)
 
 
 def bfs(model):
+    '''
+    Performs a breadth-first search in a space of equivalent models given by
+    syntactic operations. Two models are considered equivalent if they
+    generate the same reaction network.
+    '''
     # WARNING: takes looong time, finds all fix points
     rn1 = parse_reaction_network(bng.generate_network(model))
 
@@ -83,6 +101,12 @@ def bfs(model):
 
 
 def dfs(model):
+    '''
+    Performs a depth-first search in a space of equivalent models given by
+    syntactic operations. Two models are considered equivalent if they
+    generate the same reaction network.
+    Returns a model that cannot be further simplified by syntactic operations.
+    '''
     # fast, finds one fix point
     rn1 = parse_reaction_network(bng.generate_network(model))
     node = model
