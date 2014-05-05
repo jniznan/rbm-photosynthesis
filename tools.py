@@ -1,5 +1,5 @@
 from pysb import Model, Rule, bng
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 
 def search_model(model):
@@ -7,20 +7,79 @@ def search_model(model):
     Yields all descsendants of a model. They are created by applying syntactic
     operations.
     '''
-    for i, rule in enumerate(model.rules):
-        rexp = rule.rule_expression
-        react = rexp.reactant_pattern.complex_patterns
-        if len(react) != 1:
-            raise ValueError("Can't handle this yet - too many reactants")
-        prod = rexp.product_pattern.complex_patterns
-        if len(prod) != 1:
-            raise ValueError("Can't handle this yet - too many products")
-        lh, rh = react[0].monomer_patterns[0], prod[0].monomer_patterns[0]
-        if lh.monomer != rh.monomer:
-            raise ValueError("LHS and RHS do not match")
+    for m in context_enumeration_elimination(model):
+        yield m
+    for m in context_elimination(model):
+        yield m
+
+
+def context_enumeration_elimination(model):
+    grouped = defaultdict(list)
+    sort_key = get_rule_sort_key(model)
+    for rule in model.rules:
+        lh, rh = get_lh_rh(rule)
         mon = lh.monomer
-        if set(lh.site_conditions.keys()) != set(rh.site_conditions.keys()):
-            raise ValueError("LHS and RHS site conditions do not match")
+        lhs = lh.site_conditions
+        rhs = rh.site_conditions
+        diffs = [(k, v) for k, v in rhs.items() if lhs[k] != v]
+        key = (mon.name, tuple(sorted(lhs.keys())), tuple(sorted(diffs)))
+        grouped[key].append(rule)
+    for k, group in grouped.items():
+        if len(group) > 1:
+            diffs = set(zip(*k[2])[0])
+            unchanged = []
+            for rule in group:
+                lh, _ = get_lh_rh(rule)
+                lhs = lh.site_conditions
+                unchanged.append({k: v for k, v in lhs.items()
+                                  if k not in diffs})
+            if unchanged:
+                for site in unchanged[0].keys():
+                    possible_states = lh.monomer.site_states[site]
+                    local = defaultdict(set)
+                    for d in unchanged:
+                        local[d[site]].add(tuple(sorted([
+                            (k, v) for k, v in d.items() if k != site])))
+                    ref = local[local.keys()[0]]
+                    if all(local[st] == ref for st in possible_states):
+                        #  it is enumerating, we can reduce :)
+                        m = copy_no_rules(model)
+                        rules = [r for r in model.rules if r not in group]
+                        rule = group[0]
+                        rexp = rule.rule_expression
+                        # now set the site state to None
+                        lh = rexp.reactant_pattern.complex_patterns[0].copy()
+                        rh = rexp.product_pattern.complex_patterns[0].copy()
+                        lh.monomer_patterns[0].site_conditions[site] = None
+                        rh.monomer_patterns[0].site_conditions[site] = None
+                        rule_new = inherit_rule(rule, lh, rh)
+                        rules.append(rule_new)
+                        rules.sort(key=sort_key)
+                        for r in rules:
+                            m.add_component(r)
+                            yield 'CEE: %s %s' % (k[0], site), m
+
+
+def get_lh_rh(rule):
+    rexp = rule.rule_expression
+    react = rexp.reactant_pattern.complex_patterns
+    if len(react) != 1:
+        raise ValueError("Can't handle this yet - too many reactants")
+    prod = rexp.product_pattern.complex_patterns
+    if len(prod) != 1:
+        raise ValueError("Can't handle this yet - too many products")
+    lh, rh = react[0].monomer_patterns[0], prod[0].monomer_patterns[0]
+    if lh.monomer != rh.monomer:
+        raise ValueError("LHS and RHS do not match")
+    if set(lh.site_conditions.keys()) != set(rh.site_conditions.keys()):
+        raise ValueError("LHS and RHS sites do not match")
+    return lh, rh
+
+
+def context_elimination(model):
+    for i, rule in enumerate(model.rules):
+        lh, rh = get_lh_rh(rule)
+        mon = lh.monomer
         sort_key = get_rule_sort_key(model)
         for site in lh.site_conditions.keys():
             if lh.site_conditions[site] == rh.site_conditions[site]:
@@ -29,16 +88,8 @@ def search_model(model):
                              if k != site})
                 rh_ = mon(**{k: v for k, v in rh.site_conditions.items()
                              if k != site})
-                rexp_ = lh_ <> rh_ if rexp.is_reversible else lh_ >> rh_
-                m = Model(_export=False)
-                rule_new = Rule(rule.name, rexp_, rule.rate_forward,
-                                rule.rate_reverse, _export=False)
-                # add everything from the old model, excluding the rules:
-                for comp in model.all_components():
-                    if comp.__class__ is not Rule:
-                        m.add_component(comp)
-                for ini in model.initial_conditions:
-                    m.initial(*ini)
+                rule_new = inherit_rule(rule, lh_, rh_)
+                m = copy_no_rules(model)
                 # add the rules in preserved order:
                 rules = [r for r in model.rules if r.name != rule_new.name]
                 rules.append(rule_new)
@@ -47,6 +98,14 @@ def search_model(model):
                     m.add_component(r)
                 yield '%s: %s(%s~%s)' % (rule.name, mon.name, site,
                                          lh.site_conditions[site]), m
+
+
+def inherit_rule(old_rule, new_lh, new_rh):
+    rule = old_rule
+    rexp = rule.rule_expression
+    rexp_ = new_lh <> new_rh if rexp.is_reversible else new_lh >> new_rh
+    return Rule(rule.name, rexp_, rule.rate_forward, rule.rate_reverse,
+                _export=False)
 
 
 def get_rule_sort_key(model):
@@ -63,7 +122,7 @@ def get_rule_sort_key(model):
 
 def parse_reaction_network(rn):
     '''
-    Parses a BNGL-generated reaction network into a set of edges.
+    Parses a BNGL-generated reaction network into a multiset of edges.
     Useful because the ordering of species and reactions might be different
     althoug the models are equivalent.
     '''
@@ -75,7 +134,7 @@ def parse_reaction_network(rn):
     for s in species:
         sid, sp, _ = s.split()
         species_map[sid] = sp
-    edges = set()
+    edges = Counter()
     reactions = lines[lines.index('begin reactions') + 1:
                       lines.index('end reactions')]
     for r in reactions:
@@ -83,7 +142,7 @@ def parse_reaction_network(rn):
         left = species_map[splits[1]]
         right = species_map[splits[2]]
         rate = splits[3]
-        edges.add((left, right, rate))
+        edges.update([(left, right, rate)])
     return edges
 
 
@@ -143,13 +202,7 @@ def dfs(model):
 
 
 def remove_duplicate_rules(model):
-    m = Model(_export=False)
-    # add everything besides rules:
-    for comp in model.all_components():
-        if comp.__class__ is not Rule:
-            m.add_component(comp)
-    for ini in model.initial_conditions:
-        m.initial(*ini)
+    m = copy_no_rules(model)
     rule_map = defaultdict(list)
     for rule in model.rules:
         rid = repr(rule.rule_expression) + repr(rule.rate_forward) +\
@@ -160,4 +213,14 @@ def remove_duplicate_rules(model):
                 for k, rules in rule_map.items()}
     for r in sorted(rule_map.values(), key=get_rule_sort_key(model)):
         m.add_component(r)
+    return m
+
+
+def copy_no_rules(model):
+    m = Model(_export=False)
+    for comp in model.all_components():
+        if comp.__class__ is not Rule:
+            m.add_component(comp)
+    for ini in model.initial_conditions:
+        m.initial(*ini)
     return m
