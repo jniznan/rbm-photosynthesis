@@ -13,10 +13,68 @@ def search_model(model):
         yield m
 
 
+def merge_bidirectional(model):
+    pass
+
+
 def context_enumeration_elimination(model):
-    grouped = defaultdict(list)
     sort_key = get_rule_sort_key(model)
-    for rule in model.rules:
+    grouped = _group_rules_by_context_and_changes(model.rules)
+    for (_, _, diffs), group in grouped.items():
+        mon = group[0].reactant_pattern.complex_patterns[0].\
+            monomer_patterns[0].monomer
+        diffs = set(zip(*diffs)[0])
+        sites = group[0].reactant_pattern.complex_patterns[0].\
+            monomer_patterns[0].site_conditions.keys()
+        sites = [s for s in sites if s not in diffs]
+        unchanged = []
+        for rule in group:
+            lh, _ = get_lh_rh(rule)
+            lhs = lh.site_conditions
+            unchanged.append(({k: v for k, v in lhs.items() if k not in diffs},
+                              rule))
+        for site in sites:
+            # local map states of the `site` into sets of occuring contexts
+            local = defaultdict(set)
+            # conmap maps contexts to lists of rules that contain that context
+            conmap = defaultdict(list)
+            excludes = set(list(diffs) + [site])
+            for rule in group:
+                lhs = get_lh_rh(rule)[0].site_conditions
+                context = tuple(sorted([(k, v) for k, v in lhs.items()
+                                        if k not in excludes]))
+                local[lhs[site]].add(context)
+                conmap[context].append(rule)
+            ref = local[local.keys()[0]]
+            possible_states = mon.site_states[site]
+            if all(local[st] == ref for st in possible_states):
+                #  it is enumerating, we can reduce :)
+                m = copy_no_rules(model)
+                rules = [r for r in model.rules if r not in group]
+                new_rules = []
+                for context in ref:
+                    name = '__'.join([r.name for r in conmap[context]])
+                    rule = conmap[context][0]
+                    rexp = rule.rule_expression
+                    # now set the site state to None
+                    lh = rexp.reactant_pattern.complex_patterns[0].copy()
+                    rh = rexp.product_pattern.complex_patterns[0].copy()
+                    lh.monomer_patterns[0].site_conditions[site] = None
+                    rh.monomer_patterns[0].site_conditions[site] = None
+                    rule_new = inherit_rule(rule, lh, rh, name=name)
+                    new_rules.append(rule_new)
+                rules.extend(new_rules)
+                rules.sort(key=sort_key)
+                for r in rules:
+                    m.add_component(r)
+                yield 'CEE: %s %s; %s' % (
+                    mon.name, site,
+                    ' '.join(map(lambda r: r.name, new_rules))), m
+
+
+def _group_rules_by_context_and_changes(rules):
+    grouped = defaultdict(list)
+    for rule in rules:
         lh, rh = get_lh_rh(rule)
         mon = lh.monomer
         lhs = lh.site_conditions
@@ -24,40 +82,7 @@ def context_enumeration_elimination(model):
         diffs = [(k, v) for k, v in rhs.items() if lhs[k] != v]
         key = (mon.name, tuple(sorted(lhs.keys())), tuple(sorted(diffs)))
         grouped[key].append(rule)
-    for k, group in grouped.items():
-        if len(group) > 1:
-            diffs = set(zip(*k[2])[0])
-            unchanged = []
-            for rule in group:
-                lh, _ = get_lh_rh(rule)
-                lhs = lh.site_conditions
-                unchanged.append({k: v for k, v in lhs.items()
-                                  if k not in diffs})
-            if unchanged:
-                for site in unchanged[0].keys():
-                    possible_states = lh.monomer.site_states[site]
-                    local = defaultdict(set)
-                    for d in unchanged:
-                        local[d[site]].add(tuple(sorted([
-                            (k, v) for k, v in d.items() if k != site])))
-                    ref = local[local.keys()[0]]
-                    if all(local[st] == ref for st in possible_states):
-                        #  it is enumerating, we can reduce :)
-                        m = copy_no_rules(model)
-                        rules = [r for r in model.rules if r not in group]
-                        rule = group[0]
-                        rexp = rule.rule_expression
-                        # now set the site state to None
-                        lh = rexp.reactant_pattern.complex_patterns[0].copy()
-                        rh = rexp.product_pattern.complex_patterns[0].copy()
-                        lh.monomer_patterns[0].site_conditions[site] = None
-                        rh.monomer_patterns[0].site_conditions[site] = None
-                        rule_new = inherit_rule(rule, lh, rh)
-                        rules.append(rule_new)
-                        rules.sort(key=sort_key)
-                        for r in rules:
-                            m.add_component(r)
-                            yield 'CEE: %s %s' % (k[0], site), m
+    return {k: g for k, g in grouped.items() if len(g) > 1}
 
 
 def get_lh_rh(rule):
@@ -96,16 +121,16 @@ def context_elimination(model):
                 rules.sort(key=sort_key)
                 for r in rules:
                     m.add_component(r)
-                yield '%s: %s(%s~%s)' % (rule.name, mon.name, site,
-                                         lh.site_conditions[site]), m
+                yield 'ce: %s: %s(%s~%s)' % (rule.name, mon.name, site,
+                                             lh.site_conditions[site]), m
 
 
-def inherit_rule(old_rule, new_lh, new_rh):
+def inherit_rule(old_rule, new_lh, new_rh, name=None):
     rule = old_rule
     rexp = rule.rule_expression
     rexp_ = new_lh <> new_rh if rexp.is_reversible else new_lh >> new_rh
-    return Rule(rule.name, rexp_, rule.rate_forward, rule.rate_reverse,
-                _export=False)
+    return Rule(name or rule.name, rexp_, rule.rate_forward,
+                rule.rate_reverse, _export=False)
 
 
 def get_rule_sort_key(model):
@@ -117,7 +142,7 @@ def get_rule_sort_key(model):
     rule_d = {}
     for i, rule in enumerate(model.rules):
         rule_d[rule.name] = i
-    return lambda r: rule_d.get(r.name, len(rule_d))
+    return lambda r: rule_d.get(r.name.split('__')[0], len(rule_d))
 
 
 def parse_reaction_network(rn):
@@ -198,7 +223,8 @@ def dfs(model):
             if rn1 == rn2:
                 node = m2
                 break
-    return remove_duplicate_rules(m1)
+    return m1
+    #return remove_duplicate_rules(m1)
 
 
 def remove_duplicate_rules(model):
