@@ -43,7 +43,7 @@ def search_model(model):
 
 def parse_reaction_network(rn):
     '''
-    Parses a BNGL-generated reaction network into a dict.
+    Parses a BNGL-generated reaction network into a set of edges.
     Useful because the ordering of species and reactions might be different
     althoug the models are equivalent.
     '''
