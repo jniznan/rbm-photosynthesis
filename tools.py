@@ -63,7 +63,8 @@ def parse_reaction_network(rn):
         splits = r.split()
         left = species_map[splits[1]]
         right = species_map[splits[2]]
-        edges.add((left, right))
+        rate = splits[3]
+        edges.add((left, right, rate))
     return edges
 
 
