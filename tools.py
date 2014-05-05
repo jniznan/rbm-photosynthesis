@@ -21,6 +21,7 @@ def search_model(model):
         mon = lh.monomer
         if set(lh.site_conditions.keys()) != set(rh.site_conditions.keys()):
             raise ValueError("LHS and RHS site conditions do not match")
+        sort_key = get_rule_sort_key(model)
         for site in lh.site_conditions.keys():
             if lh.site_conditions[site] == rh.site_conditions[site]:
                 # site does not change --> is context, try to remove it
@@ -30,16 +31,34 @@ def search_model(model):
                              if k != site})
                 rexp_ = lh_ <> rh_ if rexp.is_reversible else lh_ >> rh_
                 m = Model(_export=False)
-                r = Rule(rule.name, rexp_,
-                         rule.rate_forward, rule.rate_reverse, _export=False)
+                rule_new = Rule(rule.name, rexp_, rule.rate_forward,
+                                rule.rate_reverse, _export=False)
+                # add everything from the old model, excluding the rules:
                 for comp in model.all_components():
-                    if comp != rule:
+                    if comp.__class__ is not Rule:
                         m.add_component(comp)
                 for ini in model.initial_conditions:
                     m.initial(*ini)
-                m.add_component(r)
+                # add the rules in preserved order:
+                rules = [r for r in model.rules if r.name != rule_new.name]
+                rules.append(rule_new)
+                rules.sort(key=sort_key)
+                for r in rules:
+                    m.add_component(r)
                 yield '%s: %s(%s~%s)' % (rule.name, mon.name, site,
                                          lh.site_conditions[site]), m
+
+
+def get_rule_sort_key(model):
+    '''
+    Returns a function that can be passed to a sort as a key parameter.
+    This sorter tries to keep the rules in the same order as they were in the
+    original model.
+    '''
+    rule_d = {}
+    for i, rule in enumerate(model.rules):
+        rule_d[rule.name] = i
+    return lambda r: rule_d.get(r.name, len(rule_d))
 
 
 def parse_reaction_network(rn):
@@ -136,7 +155,9 @@ def remove_duplicate_rules(model):
         rid = repr(rule.rule_expression) + repr(rule.rate_forward) +\
             repr(rule.rate_reverse)
         rule_map[rid].append(rule)
-    for rules in rule_map.values():
-        r = min(rules, key=lambda r: (len(r.name), r.name))
+    # leave only one rule in each group:
+    rule_map = {k: min(rules, key=lambda r: (len(r.name), r.name))
+                for k, rules in rule_map.items()}
+    for r in sorted(rule_map.values(), key=get_rule_sort_key(model)):
         m.add_component(r)
     return m
