@@ -7,14 +7,38 @@ def search_model(model, sort_key=None):
     Yields all descsendants of a model. They are created by applying syntactic
     operations.
     '''
+    for m in merge_bidirectional(model, sort_key):
+        yield m
     for m in context_enumeration_elimination(model, sort_key):
         yield m
     for m in context_elimination(model, sort_key):
         yield m
+    for m in unreachable_rules_removal(model):
+        yield m
 
 
-def merge_bidirectional(model):
-    pass
+def merge_bidirectional(model, sort_key=None):
+    lh_map = defaultdict(list)
+    rh_map = defaultdict(list)
+    for rule in model.rules:
+        if not rule.rule_expression.is_reversible:
+            lh, rh = get_lh_rh(rule)
+            lh_map[(repr(lh), repr(rh))].append(rule)
+            rh_map[(repr(rh), repr(lh))].append(rule)
+    for rep in set(lh_map.keys()) & set(rh_map.keys()):
+        for fwd in lh_map[rep]:
+            for bwd in rh_map[rep]:
+                m = copy_no_rules(model)
+                rules = [r for r in model.rules if r not in [fwd, bwd]]
+                lh, rh = get_lh_rh(fwd)
+                new_rule = Rule('__'.join([fwd.name, bwd.name]), lh <> rh,
+                                fwd.rate_forward, bwd.rate_forward,
+                                _export=False)
+                rules.append(new_rule)
+                rules.sort(key=sort_key)
+                for r in rules:
+                    m.add_component(r)
+                yield 'bi: %s' % new_rule.name, m
 
 
 def context_enumeration_elimination(model, sort_key=None):
@@ -123,6 +147,15 @@ def context_elimination(model, sort_key=None):
                                              lh.site_conditions[site]), m
 
 
+def unreachable_rules_removal(model, sort_key=None):
+    for rule in model.rules:
+        m = copy_no_rules(model)
+        for r in model.rules:
+            if r != rule:
+                m.add_component(r)
+        yield 'rem: %s' % rule.name, m
+
+
 def inherit_rule(old_rule, new_lh, new_rh, name=None):
     rule = old_rule
     rexp = rule.rule_expression
@@ -177,33 +210,6 @@ def rules(model):
     return sorted([r for r in model.rules], key=lambda r: r.name)
 
 
-def bfs(model):
-    '''
-    Performs a breadth-first search in a space of equivalent models given by
-    syntactic operations. Two models are considered equivalent if they
-    generate the same reaction network.
-    '''
-    # WARNING: takes looong time, finds all fix points
-    raise DeprecationWarning('Do not use bfs! It is slow')
-    rn1 = parse_reaction_network(bng.generate_network(model))
-
-    searched = set()
-    fringe = [model]
-    edges = []
-
-    while fringe:
-        m1 = fringe.pop(0)
-        mr1 = repr(rules(m1))
-        searched.add(mr1)
-        for edge, m2 in search_model(m1):
-            rn2 = parse_reaction_network(bng.generate_network(m2))
-            if rn1 == rn2:
-                mr2 = repr(rules(m2))
-                edges.append((mr1, edge, mr2))
-                if mr2 not in searched:
-                    fringe.append(m2)
-
-
 def dfs(model):
     '''
     Performs a depth-first search in a space of equivalent models given by
@@ -225,22 +231,6 @@ def dfs(model):
                 node = m2
                 break
     return m1
-    #return remove_duplicate_rules(m1)
-
-
-def remove_duplicate_rules(model):
-    m = copy_no_rules(model)
-    rule_map = defaultdict(list)
-    for rule in model.rules:
-        rid = repr(rule.rule_expression) + repr(rule.rate_forward) +\
-            repr(rule.rate_reverse)
-        rule_map[rid].append(rule)
-    # leave only one rule in each group:
-    rule_map = {k: min(rules, key=lambda r: (len(r.name), r.name))
-                for k, rules in rule_map.items()}
-    for r in sorted(rule_map.values(), key=get_rule_sort_key(model)):
-        m.add_component(r)
-    return m
 
 
 def copy_no_rules(model):
