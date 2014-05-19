@@ -1,5 +1,6 @@
 from pysb import Model, Rule, bng
 from collections import defaultdict, Counter
+from operator import add
 
 
 def search_model(model, sort_key=None):
@@ -13,16 +14,26 @@ def search_model(model, sort_key=None):
         yield m
     for m in context_elimination(model, sort_key):
         yield m
-    for m in unreachable_rules_removal(model):
+    for m in rules_removal(model):
         yield m
 
 
 def merge_bidirectional(model, sort_key=None):
+    '''
+    Yields models that are in relation bidirectional grouping
+    with the model passed in.
+
+    Parameters
+    ----------
+    model: pysb.Model
+    sort_key: function
+        Function to be used for sorting the rules.
+    '''
     lh_map = defaultdict(list)
     rh_map = defaultdict(list)
     for rule in model.rules:
         if not rule.rule_expression.is_reversible:
-            lh, rh = get_lh_rh(rule)
+            lh, rh = _get_lh_rh(rule)
             lh_map[(repr(lh), repr(rh))].append(rule)
             rh_map[(repr(rh), repr(lh))].append(rule)
     for rep in set(lh_map.keys()) & set(rh_map.keys()):
@@ -30,8 +41,9 @@ def merge_bidirectional(model, sort_key=None):
             for bwd in rh_map[rep]:
                 m = copy_no_rules(model)
                 rules = [r for r in model.rules if r not in [fwd, bwd]]
-                lh, rh = get_lh_rh(fwd)
-                new_rule = Rule('__'.join([fwd.name, bwd.name]), lh <> rh,
+                lh, rh = _get_lh_rh(fwd)
+                lh, rh = reduce(add, lh), reduce(add, rh)
+                new_rule = Rule(new_rule_name(fwd, bwd), lh <> rh,
                                 fwd.rate_forward, bwd.rate_forward,
                                 _export=False)
                 rules.append(new_rule)
@@ -41,113 +53,155 @@ def merge_bidirectional(model, sort_key=None):
                 yield 'bi: %s' % new_rule.name, m
 
 
+def new_rule_name(*rules):
+    '''
+    Returns a new name for a set of rules to be merged together.
+    Tries to find the largest prefix and sets it as a prefix of the new name
+    in order to avoid repetition in the name.
+    '''
+    names = [rule.name for rule in rules]
+    n = min(map(len, names))
+    prefix = ''
+    for i in range(n):
+        chars = map(lambda n: n[i], names)
+        if any(chars[0] != ch for ch in chars):
+            break
+        prefix += chars[0]
+    ret = '__'.join(sorted(map(lambda n: n[i:].strip('_'), names)))
+    if prefix:
+        ret = prefix.strip('_') + '___' + ret
+    return ret
+
+
 def context_enumeration_elimination(model, sort_key=None):
+    '''
+    Yields models that are in relation context enumeration elimination
+    with the model passed in.
+
+    Parameters
+    ----------
+    model: pysb.Model
+    sort_key: function
+        Function to be used for sorting the rules.
+    '''
     grouped = _group_rules_by_context_and_changes(model.rules)
-    for (_, _, diffs), group in grouped.items():
-        mon = group[0].reactant_pattern.complex_patterns[0].\
-            monomer_patterns[0].monomer
-        diffs = set(zip(*diffs)[0])
-        sites = group[0].reactant_pattern.complex_patterns[0].\
-            monomer_patterns[0].site_conditions.keys()
-        sites = [s for s in sites if s not in diffs]
-        unchanged = []
-        for rule in group:
-            lh, _ = get_lh_rh(rule)
-            lhs = lh.site_conditions
-            unchanged.append(({k: v for k, v in lhs.items() if k not in diffs},
-                              rule))
-        for site in sites:
+    for key, group in grouped.items():
+        sites = [(i, s) for i, (lname, lsites, rname, rdiffs) in enumerate(key)
+                 if lname == rname for s in lsites if s not in zip(*rdiffs)[0]]
+        for i, site in sites:
             # local map states of the `site` into sets of occuring contexts
             local = defaultdict(set)
             # conmap maps contexts to lists of rules that contain that context
             conmap = defaultdict(list)
-            excludes = set(list(diffs) + [site])
+            possible_states = None
             for rule in group:
-                lhs = get_lh_rh(rule)[0].site_conditions
-                context = tuple(sorted([(k, v) for k, v in lhs.items()
-                                        if k not in excludes]))
-                local[lhs[site]].add(context)
+                lh, _ = _get_lh_rh(rule)
+                context = [(j, k, v) for j, l in enumerate(lh)
+                           for k, v in l.site_conditions.items()
+                           if (j, k) in sites and (k != site or i != j)]
+                context = tuple(sorted(context))
+                local[lh[i].site_conditions[site]].add(context)
                 conmap[context].append(rule)
+                if not possible_states:
+                    possible_states = lh[i].monomer.site_states[site]
             ref = local[local.keys()[0]]
-            possible_states = mon.site_states[site]
             if all(local[st] == ref for st in possible_states):
                 #  it is enumerating, we can reduce :)
                 m = copy_no_rules(model)
                 rules = [r for r in model.rules if r not in group]
                 new_rules = []
                 for context in ref:
-                    name = '__'.join([r.name for r in conmap[context]])
+                    name = new_rule_name(*conmap[context])
                     rule = conmap[context][0]
                     rexp = rule.rule_expression
                     # now set the site state to None
-                    lh = rexp.reactant_pattern.complex_patterns[0].copy()
-                    rh = rexp.product_pattern.complex_patterns[0].copy()
-                    lh.monomer_patterns[0].site_conditions[site] = None
-                    rh.monomer_patterns[0].site_conditions[site] = None
-                    rule_new = inherit_rule(rule, lh, rh, name=name)
+                    lh = map(lambda p: p.copy(),
+                             rexp.reactant_pattern.complex_patterns)
+                    rh = map(lambda p: p.copy(),
+                             rexp.product_pattern.complex_patterns)
+                    lh[i].monomer_patterns[0].site_conditions[site] = None
+                    rh[i].monomer_patterns[0].site_conditions[site] = None
+                    rule_new = inherit_rule(rule, reduce(add, lh),
+                                            reduce(add, rh), name=name)
                     new_rules.append(rule_new)
                 rules.extend(new_rules)
                 rules.sort(key=sort_key)
                 for r in rules:
                     m.add_component(r)
                 yield 'CEE: %s %s; %s' % (
-                    mon.name, site,
+                    i, site,
                     ' '.join(map(lambda r: r.name, new_rules))), m
 
 
 def _group_rules_by_context_and_changes(rules):
+    # assumes reactants and products are sorted the same way
     grouped = defaultdict(list)
     for rule in rules:
-        lh, rh = get_lh_rh(rule)
-        mon = lh.monomer
-        lhs = lh.site_conditions
-        rhs = rh.site_conditions
-        diffs = [(k, v) for k, v in rhs.items() if lhs[k] != v]
-        key = (mon.name, tuple(sorted(lhs.keys())), tuple(sorted(diffs)))
-        grouped[key].append(rule)
+        lh, rh = _get_lh_rh(rule)
+        n = min(len(lh), len(rh))
+        key = []
+        for l, r in zip(lh[:n], rh[:n]):
+            lmon, rmon = l.monomer, r.monomer
+            lhs = l.site_conditions
+            rhs = r.site_conditions
+            if lmon.name == rmon.name:
+                diffs = [(k, v) for k, v in rhs.items() if lhs[k] != v]
+            else:
+                diffs = rhs.items()
+            key.append((lmon.name, tuple(sorted(lhs.keys())),
+                        rmon.name, tuple(sorted(diffs))))
+        for r in rh[n:]:
+            rhs = r.site_conditions
+            key.append((None, tuple(),
+                        r.monomer.name, tuple(sorted(rhs.items()))))
+        for l in lh[n:]:
+            lhs = l.site_conditions
+            key.append((l.monomer.name, tuple(sorted(lhs.keys())),
+                        None, tuple()))
+        grouped[tuple(key)].append(rule)
     return {k: g for k, g in grouped.items() if len(g) > 1}
 
 
-def get_lh_rh(rule):
+def _get_lh_rh(rule):
     rexp = rule.rule_expression
-    react = rexp.reactant_pattern.complex_patterns
-    if len(react) != 1:
-        raise ValueError("Can't handle this yet - too many reactants")
-    prod = rexp.product_pattern.complex_patterns
-    if len(prod) != 1:
-        raise ValueError("Can't handle this yet - too many products")
-    lh, rh = react[0].monomer_patterns[0], prod[0].monomer_patterns[0]
-    if lh.monomer != rh.monomer:
-        raise ValueError("LHS and RHS do not match")
-    if set(lh.site_conditions.keys()) != set(rh.site_conditions.keys()):
-        raise ValueError("LHS and RHS sites do not match")
+    lh = [r.monomer_patterns[0]
+          for r in rexp.reactant_pattern.complex_patterns]
+    rh = [r.monomer_patterns[0]
+          for r in rexp.product_pattern.complex_patterns]
     return lh, rh
 
 
 def context_elimination(model, sort_key=None):
     for i, rule in enumerate(model.rules):
-        lh, rh = get_lh_rh(rule)
-        mon = lh.monomer
-        for site in lh.site_conditions.keys():
-            if lh.site_conditions[site] == rh.site_conditions[site]:
-                # site does not change --> is context, try to remove it
-                lh_ = mon(**{k: v for k, v in lh.site_conditions.items()
-                             if k != site})
-                rh_ = mon(**{k: v for k, v in rh.site_conditions.items()
-                             if k != site})
-                rule_new = inherit_rule(rule, lh_, rh_)
-                m = copy_no_rules(model)
-                # add the rules in preserved order:
-                rules = [r for r in model.rules if r.name != rule_new.name]
-                rules.append(rule_new)
-                rules.sort(key=sort_key)
-                for r in rules:
-                    m.add_component(r)
-                yield 'ce: %s: %s(%s~%s)' % (rule.name, mon.name, site,
-                                             lh.site_conditions[site]), m
+        lh, rh = _get_lh_rh(rule)
+        n = min(len(lh), len(rh))
+        for i in range(n):
+            l, r = lh[i], rh[i]
+            for site in l.site_conditions.keys():
+                if l.monomer == r.monomer and \
+                        l.site_conditions[site] == r.site_conditions[site]:
+                    mon = l.monomer
+                    # site does not change --> is context, try to remove it
+                    l_ = mon(**{k: v for k, v in l.site_conditions.items()
+                                if k != site})
+                    lh_ = reduce(add, lh[:i] + [l_] + lh[i + 1:])
+                    r_ = mon(**{k: v for k, v in r.site_conditions.items()
+                                if k != site})
+                    rh_ = reduce(add, rh[:i] + [r_] + rh[i + 1:])
+                    rule_new = inherit_rule(rule, lh_, rh_)
+                    m = copy_no_rules(model)
+                    # add the rules in preserved order:
+                    rules = [rul for rul in model.rules
+                             if rul.name != rule_new.name]
+                    rules.append(rule_new)
+                    rules.sort(key=sort_key)
+                    for rul in rules:
+                        m.add_component(rul)
+                    yield 'ce: %s: %s(%s~%s)' % (rule.name, mon.name, site,
+                                                 l.site_conditions[site]), m
 
 
-def unreachable_rules_removal(model, sort_key=None):
+def rules_removal(model, sort_key=None):
     for rule in model.rules:
         m = copy_no_rules(model)
         for r in model.rules:
@@ -169,6 +223,10 @@ def get_rule_sort_key(model):
     Returns a function that can be passed to a sort as a key parameter.
     This sorter tries to keep the rules in the same order as they were in the
     original model.
+
+    Parameters
+    ----------
+    model: pysb.Model
     '''
     rule_d = {}
     for i, rule in enumerate(model.rules):
@@ -195,8 +253,10 @@ def parse_reaction_network(rn):
                       lines.index('end reactions')]
     for r in reactions:
         splits = r.split()
-        left = species_map[splits[1]]
-        right = species_map[splits[2]]
+        left = ','.join(sorted([species_map[spid]
+                                for spid in splits[1].split(',')]))
+        right = ','.join(sorted([species_map[spid]
+                                 for spid in splits[2].split(',')]))
         rate = splits[3]
         edges.update([(left, right, rate)])
     return edges
@@ -207,6 +267,13 @@ def reaction_network(m):
 
 
 def to_bngl(model):
+    '''
+    Converts the pysb model to BNGL.
+
+    Parameters
+    ----------
+    model: pysb.Model
+    '''
     return bng.BngGenerator(model).get_content()
 
 
@@ -214,6 +281,10 @@ def rules(model):
     '''
     Return rules of the specified model sorted by their names.
     Useful for canonic model representation.
+
+    Parameters
+    ----------
+    model: pysb.Model
     '''
     return sorted([r for r in model.rules], key=lambda r: r.name)
 
