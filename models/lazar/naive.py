@@ -21,7 +21,7 @@ param_dict = {
     'kbLF': 10,
     'kbR': 10,
     'kbX': 10,
-    'kf(HC)': 100,
+    'kfHC': 100,
     'kfB': 250,
     'kfct': 100,
     'kfF': 100,
@@ -30,7 +30,7 @@ param_dict = {
     'kFNR': 220,
     'kfR': 100,
     'kfX': 100,
-    'kL(HC)': 2300,
+    'kLHC': 2300,
     'kL1': 200,
     'kL2': 4000,
 }
@@ -199,12 +199,12 @@ for i, fb in enumerate(['n', 'm']):
          kfR, kbR)
 
 Rule('charge_separation_in_PSI',
-     PSI(P700='n', Fb='n') > PSI(P700='p', Fb='m'),
+     PSI(P700='n', Fb='n') >> PSI(P700='p', Fb='m'),
      kL1)
 
 for i, qb in enumerate(['n', 'm', '2m']):
     Rule('charge_separation_in_PSII_%s' % (i + 1),
-         PSII(P680='n', Qa='n', Qb=qb) <>
+         PSII(P680='n', Qa='n', Qb=qb) >>
          PSII(P680='p', Qa='m', Qb=qb),
          kL2)
 
@@ -234,10 +234,10 @@ Parameter('init_ps2', 1)
 Initial(PSII(P680='n', Qa='n', Qb='n'), init_ps2)
 #P700/Fb 1
 Parameter('init_ps1', 1)
-Initial(PSI(P700='n', Fb='n'))
+Initial(PSI(P700='n', Fb='n'), init_ps1)
 #Pc  3
 Parameter('init_Pc', 3)
-Initial(Pc(x='n'))
+Initial(Pc(x='n'), init_Pc)
 #PQ  2.5
 Parameter('init_PQ', 2.5)
 Initial(PQ(), init_PQ)
@@ -249,16 +249,11 @@ Parameter('init_s0', 0.25)
 Initial(S(x='0'), init_s0)
 #S1  0.75
 Parameter('init_s1', 0.75)
-Initial(S(x='1'))
+Initial(S(x='1'), init_s1)
 
 
-Assigned quantities
-+Fq(t)
-Initial expression: ((1-0.55)*("P680+/Qa-/Qb"+"P680+/Qa-/Qb-"+"P680+/Qa-/Qb2-"+"P680/Qa-/Qb2-"+"P680/Qa-/Qb"+"P680/Qa-/Qb-")/(1-0.55*("P680+/Qa-/Qb"+"P680+/Qa-/Qb-"+"P680+/Qa-/Qb2-"+"P680/Qa-/Qb2-"+"P680/Qa-/Qb"+"P680/Qa-/Qb-")))/(1+((1/45+(("P680+/Qa-/Qb"+"P680+/Qa-/Qb-"+"P680+/Qa-/Qb2-"+"P680/Qa-/Qb2-"+"P680/Qa-/Qb"+"P680/Qa-/Qb-")*4/63))*"PQ"))
-Simulation type: assignment
-+Funq(t)
-Initial expression: (1-0.55)*("P680+/Qa-/Qb"+"P680+/Qa-/Qb-"+"P680+/Qa-/Qb2-"+"P680/Qa-/Qb2-"+"P680/Qa-/Qb"+"P680/Qa-/Qb-")/(1-0.55*("P680+/Qa-/Qb"+"P680+/Qa-/Qb-"+"P680+/Qa-/Qb2-"+"P680/Qa-/Qb2-"+"P680/Qa-/Qb"+"P680/Qa-/Qb-"))
-Simulation type: assignment
-+I820
-Initial expression: 10^(-(2.16*10^(-7)*1590*"Pc+" + 2.16*10^(-7)*10300*("P700+/Fb"+"P700+/Fb-")))
-Simulation type: assignment
+# observables
+Observable('Qa_m', PSII(Qa='m'))
+Observable('PQ_n', PQ())
+Observable('Pc_p', Pc(x='p'))
+Observable('P700_p', PSI(P700='p'))
