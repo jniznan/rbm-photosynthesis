@@ -1,0 +1,98 @@
+begin parameters
+  kFNR       2.200000e+02
+  kbLF       1.000000e+01
+  kbct       1.000000e+02
+  kL2        4.000000e+03
+  k12        1.000000e+04
+  kfR        1.000000e+02
+  k30        1.000000e+03
+  kbB        2.500000e+02
+  kfLF       1.000000e+02
+  kbF        1.000000e+01
+  kbFd       5.000000e+00
+  kfX        1.000000e+02
+  kAB2       1.750000e+03
+  kbX        1.000000e+01
+  kAB1       3.500000e+03
+  kfB        2.500000e+02
+  kfct       1.000000e+02
+  kbR        1.000000e+01
+  kfFd       5.000000e+00
+  kfHC       1.000000e+02
+  kfF        1.000000e+02
+  kHCL       7.000000e+00
+  kLHC       2.300000e+03
+  k01        2.000000e+04
+  ka         1.000000e-02
+  kbHC       1.000000e+01
+  k23        3.330000e+03
+  kBA1       1.750000e+02
+  kBA2       3.500000e+01
+  kL1        2.000000e+02
+  init_cyt   1.000000e+00
+  init_Fd    3.000000e+00
+  init_FNR   3.000000e+00
+  init_ps2   1.000000e+00
+  init_ps1   1.000000e+00
+  init_Pc    3.000000e+00
+  init_PQ    2.500000e+00
+  init_PQH   2.500000e+00
+  init_s0    2.500000e-01
+  init_s1    7.500000e-01
+end parameters
+
+begin molecule types
+  PSII(P680~n~p,Qa~n~m,Qb~n~m~2m)
+  PQ()
+  PQH()
+  S(x~0~1~2~3)
+  CytB6F(bL~n~m,bHc~n~m~2m,f~n~m)
+  Fd(x~n~m)
+  Pc(x~n~p)
+  PSI(P700~n~p,Fb~n~m)
+  FNR(x~i~a~am~a2m)
+end molecule types
+
+begin observables
+  Molecules Qa_m     PSII(Qa~m)
+  Molecules PQ_n     PQ()
+  Molecules Pc_p     Pc(x~p)
+  Molecules P700_p   PSI(P700~p)
+end observables
+
+begin species
+  CytB6F(bL~n,bHc~n,f~n)   init_cyt
+  Fd(x~n)                  init_Fd
+  FNR(x~i)                 init_FNR
+  PSII(P680~n,Qa~n,Qb~n)   init_ps2
+  PSI(P700~n,Fb~n)         init_ps1
+  Pc(x~n)                  init_Pc
+  PQ()                     init_PQ
+  PQH()                    init_PQH
+  S(x~0)                   init_s0
+  S(x~1)                   init_s1
+end species
+begin reaction rules
+  electron_transport_from_Fd_to_FNR_1:                                   FNR(x~a) + Fd(x~m) <-> FNR(x~am) + Fd(x~n)    kfFd, kbFd
+  electron_transport_from_Fd_to_FNR_2:                                   FNR(x~am) + Fd(x~m) <-> FNR(x~a2m) + Fd(x~n)    kfFd, kbFd
+  activation_of_FNR:                                                     FNR(x~i) -> FNR(x~a)    ka
+  turnover_of_FNR:                                                       FNR(x~a2m) -> FNR(x~a)    kFNR
+  charge_separation_in_PSI:                                              PSI(P700~n,Fb~n) -> PSI(P700~p,Fb~m)    kL1
+  electron_transport_from_photosystemI_to_Fd___1__2:                     Fd(x~n) + PSI(P700,Fb~m) <-> Fd(x~m) + PSI(P700,Fb~n)    kfX, kbX
+  electron_donation___1_2__2_2__3_2__4_2__5_2__6_2:                      S(x~1) + PSII(P680~p,Qa,Qb) -> S(x~2) + PSII(P680~n,Qa,Qb)    k12
+  electron_transports_from_qa_to_qb___1__2:                              PSII(P680,Qa~m,Qb~n) <-> PSII(P680,Qa~n,Qb~m)    kAB1, kBA1
+  electron_transport_from_cytochrome_to_oxidized_PQ___1__2__3__4:        PQ() + CytB6F(bL,bHc~2m,f) <-> PQH() + CytB6F(bL,bHc~n,f)    kfHC, kbHC
+  electron_transport_from_reduced_Fd_to_cytochrome___1__2__3__4:         Fd(x~m) + CytB6F(bL,bHc~n,f) <-> Fd(x~n) + CytB6F(bL,bHc~m,f)    kfct, kbct
+  electron_donation___1_1__2_1__3_1__4_1__5_1__6_1:                      S(x~0) + PSII(P680~p,Qa,Qb) -> S(x~1) + PSII(P680~n,Qa,Qb)    k01
+  electron_donation___1_3__2_3__3_3__4_3__5_3__6_3:                      S(x~2) + PSII(P680~p,Qa,Qb) -> S(x~3) + PSII(P680~n,Qa,Qb)    k23
+  electron_transports_from_qa_to_reduced_qb___1__2:                      PSII(P680,Qa~m,Qb~m) <-> PSII(P680,Qa~n,Qb~2m)    kAB2, kBA2
+  electron_transport_inside_cytochrome___3__4:                           CytB6F(bL~m,bHc~m,f) <-> CytB6F(bL~n,bHc~2m,f)    kLHC, kHCL
+  electron_transport_inside_cytochrome___1__2:                           CytB6F(bL~m,bHc~n,f) <-> CytB6F(bL~n,bHc~m,f)    kLHC, kHCL
+  electron_transport_from_reduced_PQ_to_cytochrome___1__2__3:            PQH() + CytB6F(bL~n,bHc,f~n) <-> PQ() + CytB6F(bL~m,bHc,f~m)    kfLF, kbLF
+  charge_separation_in_PSII___1__2__3:                                   PSII(P680~n,Qa~n,Qb) -> PSII(P680~p,Qa~m,Qb)    kL2
+  electron_transport_from_reduced_Fd_to_cytochrome___5__6__7__8:         Fd(x~m) + CytB6F(bL,bHc~m,f) <-> Fd(x~n) + CytB6F(bL,bHc~2m,f)    kfct, kbct
+  electron_donation_to_P700_by_Pc___1__2:                                Pc(x~n) + PSI(P700~p,Fb) <-> Pc(x~p) + PSI(P700~n,Fb)    kfR, kbR
+  Qb_PQ_exchange___1__2__3__4:                                           PQ() + PSII(P680,Qa,Qb~2m) <-> PQH() + PSII(P680,Qa,Qb~n)    kfB, kbB
+  electron_donation___1_0__2_0__3_0__4_0__5_0__6_0:                      S(x~3) + PSII(P680~p,Qa,Qb) -> S(x~0) + PSII(P680~n,Qa,Qb)    k30
+  electron_transport_from_cytochrome_to_oxidized_Pc___1__3__5__2__4__6:  CytB6F(bL,bHc,f~m) + Pc(x~p) <-> CytB6F(bL,bHc,f~n) + Pc(x~n)    kfF, kbF
+end reaction rules

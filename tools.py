@@ -3,7 +3,7 @@ from collections import defaultdict, Counter
 from operator import add
 
 
-def search_model(model, sort_key=None):
+def search_model(model, sort_key=None, up_to_cee=False):
     '''
     Yields all descsendants of a model. They are created by applying syntactic
     operations.
@@ -12,10 +12,11 @@ def search_model(model, sort_key=None):
         yield m
     for m in context_enumeration_elimination(model, sort_key):
         yield m
-    for m in context_elimination(model, sort_key):
-        yield m
-    for m in rules_removal(model):
-        yield m
+    if not up_to_cee:
+        for m in context_elimination(model, sort_key):
+            yield m
+        for m in rules_removal(model):
+            yield m
 
 
 def merge_bidirectional(model, sort_key=None):
@@ -289,7 +290,7 @@ def rules(model):
     return sorted([r for r in model.rules], key=lambda r: r.name)
 
 
-def dfs(model):
+def dfs(model, up_to_cee=False):
     '''
     Performs a depth-first search in a space of equivalent models given by
     syntactic operations. Two models are considered equivalent if they
@@ -303,7 +304,8 @@ def dfs(model):
     while node:
         m1 = node
         node = None
-        for edge, m2 in search_model(m1, sort_key=sort_key):
+        for edge, m2 in search_model(m1, sort_key=sort_key,
+                                     up_to_cee=up_to_cee):
             rn2 = parse_reaction_network(bng.generate_network(m2))
             if rn1 == rn2:
                 print edge
