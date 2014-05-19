@@ -7,4 +7,6 @@ Rule-based modeling in photosynthesis
 
 Models
 ------
+`Holzwarth's model <http://nbviewer.ipython.org/github/jniznan/rbm-photosynthesis/blob/master/holzwarth.ipynb>`_
+
 `Lazar's model <http://nbviewer.ipython.org/github/jniznan/rbm-photosynthesis/blob/master/lazar.ipynb>`_
