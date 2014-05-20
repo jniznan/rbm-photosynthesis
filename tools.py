@@ -338,8 +338,9 @@ def bng_simulate(model, times, method='ode', output_dir='/tmp', cleanup=True):
 
     Parameters
     ----------
-    model : Model
-        Model to simulate.
+    model : pysb.Model or string
+        Model to simulate. Can be either a pysb.Model or a string representing
+        BNGL model.
     times: list of floats
         Sample times.
     method: string
@@ -361,9 +362,10 @@ def bng_simulate(model, times, method='ode', output_dir='/tmp', cleanup=True):
     end actions
     """ % (method, times)
 
-    gen = BngGenerator(model)
-    bng_filename = '%s_%d_%d_temp.bngl' % (
-        model.name, os.getpid(), random.randint(0, 10000))
+    if not isinstance(model, str):
+        model = BngGenerator(model).get_content()
+    bng_filename = '%d_%d_temp.bngl' % (
+        os.getpid(), random.randint(0, 10000))
     gdat_filename = bng_filename.replace('.bngl', '.gdat')
     cdat_filename = bng_filename.replace('.bngl', '.cdat')
     net_filename = bng_filename.replace('.bngl', '.net')
@@ -372,7 +374,7 @@ def bng_simulate(model, times, method='ode', output_dir='/tmp', cleanup=True):
         working_dir = os.getcwd()
         os.chdir(output_dir)
         bng_file = open(bng_filename, 'w')
-        bng_file.write(gen.get_content())
+        bng_file.write(model)
         bng_file.write(run_ssa_code)
         bng_file.close()
         p = subprocess.Popen(['perl', _get_bng_path(), bng_filename],

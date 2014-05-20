@@ -10,3 +10,5 @@ Models
 `Holzwarth's model <http://nbviewer.ipython.org/github/jniznan/rbm-photosynthesis/blob/master/holzwarth.ipynb>`_
 
 `Lazar's model <http://nbviewer.ipython.org/github/jniznan/rbm-photosynthesis/blob/master/lazar.ipynb>`_
+
+`Lazar's model with exchanged PSII <http://nbviewer.ipython.org/github/jniznan/rbm-photosynthesis/blob/master/exchange_ps2.ipynb>`_
