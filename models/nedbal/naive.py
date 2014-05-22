@@ -7,14 +7,15 @@ Model()
 # rule-based form.
 Parameter('k', 1.)
 
-Monomer('PSII', ['Ant', 'Yz', 'P680', 'ChlD', 'Pheo', 'Qa', 'S'],
+Monomer('PSII', ['Ant', 'Yz', 'P680', 'ChlD', 'Pheo', 'Qa', 'S', 'Qb'],
         {'Ant': ['n', 'exc'],
          'Yz': ['n', 'p'],
          'P680': ['n', 'p'],
          'ChlD': ['n', 'exc', 'p'],
          'Pheo': ['n', 'm'],
          'Qa': ['n', 'm'],
-         'S': ['0', '1', '2', '3', '4']})
+         'S': ['0', '1', '2', '3', '4'],
+         'Qb': ['n', 'm', '2m', 'empty']})
 
 # rules
 Rule('excitation_antenna',
@@ -23,9 +24,9 @@ Rule('excitation_primary_chlorophyll_donor',
      PSII(ChlD='n') >> PSII(ChlD='exc'), k)
 Rule('energy_transfer',
      PSII(Ant='exc', ChlD='n') <> PSII(Ant='n', ChlD='exc'), k, k)
-Rule('deexcitation_antenna_fluorescence',
+Rule('deexcitation_antenna',
      PSII(Ant='exc') >> PSII(Ant='n'), k)
-Rule('deexcitation_chlor_donor_fluorescence',
+Rule('deexcitation_chlor_donor',
      PSII(ChlD='exc') >> PSII(ChlD='n'), k)
 Rule('primary_charge_separation',
      PSII(Yz='n', P680='n', ChlD='exc', Pheo='n') >>
@@ -59,8 +60,17 @@ for s in range(4):
 Rule('S4_to_S0_transition',
      PSII(S='4') >> PSII(S='0'), k)  # TODO include oxygen release ??
 
+Rule('qb_reduction_by_qa_1',
+     PSII(Qa='m', Qb='n') >> PSII(Qa='n', Qb='m'), k)
+Rule('qb_reduction_by_qa_2',
+     PSII(Qa='m', Qb='m') >> PSII(Qa='n', Qb='2m'), k)
+Rule('plastoquinone_release',
+     PSII(Qb='2m') >> PSII(Qb='empty'), k)
+Rule('plastoquinone_arrival',
+     PSII(Qb='empty') >> PSII(Qb='n'), k)
+
 
 # initial conditions
 Parameter('init', 1)
-Initial(PSII(Ant='n', Yz='n', P680='n', ChlD='n', Pheo='n', Qa='n', S='0'),
+Initial(PSII(Ant='n', Yz='n', P680='n', ChlD='n', Pheo='n', Qa='n', S='0', Qb='n'),
         init)

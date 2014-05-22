@@ -1,0 +1,116 @@
+begin parameters
+  ekL     4000   
+  ekRec  10000   
+  ek01   20000   
+  ek12   10000
+  ek23    3330
+  ek30    1000
+  ekAB1   3500   
+  ekAB2   1750   
+  ekBA1    175   
+  ekBA2     35   
+  ekfUnbind  500 
+  ekbUnbind  500
+  ekfBind  500 
+  ekbBind  500
+  kFNR       2.200000e+02
+  kbLF       1.000000e+01
+  kbct       1.000000e+02
+  kfR        1.000000e+02
+  kfLF       1.000000e+02
+  kbF        1.000000e+01
+  kbFd       5.000000e+00
+  kfX        1.000000e+02
+  kbX        1.000000e+01
+  kfct       1.000000e+02
+  kbR        1.000000e+01
+  kfFd       5.000000e+00
+  kfHC       1.000000e+02
+  kfF        1.000000e+02
+  kHCL       7.000000e+00
+  kLHC       2.300000e+03
+  ka         1.000000e-02
+  kbHC       1.000000e+01
+  kL1        2.000000e+02
+  init_cyt   1.000000e+00
+  init_Fd    3.000000e+00
+  init_FNR   3.000000e+00
+  init_ps2   1.000000e+00
+  init_ps1   1.000000e+00
+  init_Pc    3.000000e+00
+  init_PQ    2.500000e+00
+  init_PQH   2.500000e+00
+  init_s0    2.500000e-01
+  init_s1    7.500000e-01
+end parameters
+
+begin molecule types
+  PSII(P680~n~p,Qa~n~m,S~0~1~2~3,Qb~n~m)
+  PQ(Qb~n~m~2m)
+  CytB6F(bL~n~m,bHc~n~m~2m,f~n~m)
+  Fd(x~n~m)
+  Pc(x~n~p)
+  PSI(P700~n~p,Fb~n~m)
+  FNR(x~i~a~am~a2m)
+end molecule types
+
+begin observables
+  Molecules Qa_m     PSII(Qa~m)
+  Molecules PQ_n     PQ(Qb~n)
+  Molecules Pc_p     Pc(x~p)
+  Molecules P700_p   PSI(P700~p)
+end observables
+
+begin species
+  CytB6F(bL~n,bHc~n,f~n)   init_cyt
+  Fd(x~n)                  init_Fd
+  FNR(x~i)                 init_FNR
+  PSII(P680~n,Qa~n,Qb~n,S~0)   init_s0
+  PSII(P680~n,Qa~n,Qb~n,S~1)   init_s1
+  PSI(P700~n,Fb~n)         init_ps1
+  Pc(x~n)                  init_Pc
+  PQ(Qb~n)                 init_PQ
+  PQ(Qb~2m)                init_PQH
+end species
+
+begin reaction rules
+  # Light induced charge separation between P680 and Qa and charge recombination:
+    PSII(P680~n,Qa~n) <-> PSII(P680~p,Qa~m)  ekL, ekRec
+  # Electron donation from S-states of OEC to P680+
+    PSII(P680~p,S~0) -> PSII(P680~n,S~1)  ek01
+    PSII(P680~p,S~1) -> PSII(P680~n,S~2)  ek12
+    PSII(P680~p,S~2) -> PSII(P680~n,S~3)  ek23
+    PSII(P680~p,S~3) -> PSII(P680~n,S~0)  ek30
+  # Electron transport from Qa- to Qb:
+    PSII(Qa~m,Qb~m!1).PQ(Qb~n!1) <-> PSII(Qa~n,Qb~m!1).PQ(Qb~m!1)   ekAB1, ekBA1
+    PSII(Qa~m,Qb~m!1).PQ(Qb~m!1) <-> PSII(Qa~n,Qb~m!1).PQ(Qb~2m!1)  ekAB2, ekBA2
+  # Exchange of doubly reduced Qb with oxidized PQ molecule from the PQ pool.
+  # by two subsequent reversible reactions:
+    PSII(Qb~m!1).PQ(Qb~2m!1) <-> PSII(Qb~m) + PQ(Qb~2m) ekfUnbind, ekbUnbind
+    PSII(Qb~m) + PQ(Qb~n) <-> PSII(Qb~m!1).PQ(Qb~n!1)   ekfBind, ekbBind
+  # Electron transport from Fd to FNR:
+    FNR(x~a) + Fd(x~m) <-> FNR(x~am) + Fd(x~n)  kfFd, kbFd
+    FNR(x~am) + Fd(x~m) <-> FNR(x~a2m) + Fd(x~n)  kfFd, kbFd
+  # Activation of FNR:
+      FNR(x~i) -> FNR(x~a)  ka
+  # Turnover of FNR:
+    FNR(x~a2m) -> FNR(x~a)  kFNR
+  # Charge separation in PSI:  
+    PSI(P700~n,Fb~n) -> PSI(P700~p,Fb~m)  kL1
+  # Electron transport from PSI to Fd:     
+    Fd(x~n) + PSI(Fb~m) <-> Fd(x~m) + PSI(Fb~n)  kfX, kbX
+  # Electron transport inside cytochrome:    
+    CytB6F(bL~m,bHc~m) <-> CytB6F(bL~n,bHc~2m)  kLHC, kHCL
+    CytB6F(bL~m,bHc~n) <-> CytB6F(bL~n,bHc~m)  kLHC, kHCL
+  # Electron transport from reduced PQ to cytochrome:  
+    PQ(Qb~2m) + CytB6F(bL~n,f~n) <-> PQ(Qb~n) + CytB6F(bL~m,f~m)  kfLF, kbLF
+  # Electron donation to P700 by Pc: 
+    Pc(x~n) + PSI(P700~p) <-> Pc(x~p) + PSI(P700~n)  kfR, kbR
+  # Electron transport from cytochrome to oxidized PQ:  
+    PQ(Qb~n) + CytB6F(bHc~2m) <-> PQ(Qb~2m) + CytB6F(bHc~n)  kfHC, kbHC
+  # Electron transport from reduced Fd to cytochrome:     
+    Fd(x~m) + CytB6F(bHc~n) <-> Fd(x~n) + CytB6F(bHc~m)  kfct, kbct
+    Fd(x~m) + CytB6F(bHc~m) <-> Fd(x~n) + CytB6F(bHc~2m)  kfct, kbct
+  # Electron transport from cytochrome to oxidized Pc:
+    CytB6F(f~m) + Pc(x~p) <-> CytB6F(f~n) + Pc(x~n)  kfF, kbF
+end reaction rules

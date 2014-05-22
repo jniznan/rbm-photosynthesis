@@ -1,15 +1,14 @@
 begin parameters
-     # Rate constants:
-  ekL     4000   # 1/sec Charge separation rate, Lazar_2003
-  ekRec  10000   # 1/sec Charge recombination rate, Lazar_2003
-  ek01   20000   # 1/sec Electron donation from S0 to P680+ rate constant, Lazar_2003
+  ekL     4000   
+  ekRec  10000   
+  ek01   20000   
   ek12   10000
   ek23    3330
   ek30    1000
-  ekAB1   3500   # 1/sec Electron transport from Qa- to Qb, Lazar_2003
-  ekAB2   1750   # 1/sec Electron transport from Qa- to Qb-, Lazar_2003
-  ekBA1    175   # 1/sec Electron transport from Qb- to Qa, Lazar_2003
-  ekBA2     35   # 1/sec Electron transport from Qb2- to Qa, Lazar_2003 
+  ekAB1   3500   
+  ekAB2   1750   
+  ekBA1    175   
+  ekBA2     35   
   ekfUnbind  500 
   ekbUnbind  500
   ekfBind  500 
@@ -19,19 +18,12 @@ begin parameters
   kFNR       2.200000e+02
   kbLF       1.000000e+01
   kbct       1.000000e+02
-  kL2        4.000000e+03
-  k12        1.000000e+04
   kfR        1.000000e+02
-  k30        1.000000e+03
-  kbB        2.500000e+02
   kfLF       1.000000e+02
   kbF        1.000000e+01
   kbFd       5.000000e+00
   kfX        1.000000e+02
-  kAB2       1.750000e+03
   kbX        1.000000e+01
-  kAB1       3.500000e+03
-  kfB        2.500000e+02
   kfct       1.000000e+02
   kbR        1.000000e+01
   kfFd       5.000000e+00
@@ -39,12 +31,8 @@ begin parameters
   kfF        1.000000e+02
   kHCL       7.000000e+00
   kLHC       2.300000e+03
-  k01        2.000000e+04
   ka         1.000000e-02
   kbHC       1.000000e+01
-  k23        3.330000e+03
-  kBA1       1.750000e+02
-  kBA2       3.500000e+01
   kL1        2.000000e+02
   init_cyt   1.000000e+00
   init_Fd    3.000000e+00
