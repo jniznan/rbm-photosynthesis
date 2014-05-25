@@ -7,6 +7,15 @@ def search_model(model, sort_key=None, up_to_cee=False):
     '''
     Yields all descsendants of a model. They are created by applying syntactic
     operations.
+
+    Parameters
+    ----------
+    model: pysb.Model
+    sort_key: function
+        Function to be used for sorting the rules.
+    up_to_cee : bool
+        If True, then it performes only bidirectional merging and context
+        enumeration elimination.
     '''
     for m in merge_bidirectional(model, sort_key):
         yield m
@@ -173,6 +182,16 @@ def _get_lh_rh(rule):
 
 
 def context_elimination(model, sort_key=None):
+    '''
+    Yields models that are in relation context elimination
+    with the model passed in.
+
+    Parameters
+    ----------
+    model: pysb.Model
+    sort_key: function
+        Function to be used for sorting the rules.
+    '''
     for i, rule in enumerate(model.rules):
         lh, rh = _get_lh_rh(rule)
         n = min(len(lh), len(rh))
@@ -203,6 +222,16 @@ def context_elimination(model, sort_key=None):
 
 
 def rules_removal(model, sort_key=None):
+    '''
+    Yields models that are in relation rule elimination
+    with the model passed in.
+
+    Parameters
+    ----------
+    model: pysb.Model
+    sort_key: function
+        Function to be used for sorting the rules.
+    '''
     for rule in model.rules:
         m = copy_no_rules(model)
         for r in model.rules:
@@ -212,6 +241,21 @@ def rules_removal(model, sort_key=None):
 
 
 def inherit_rule(old_rule, new_lh, new_rh, name=None):
+    '''
+    Inherits the rates from the old rule but uses the new
+    left- and right-hand sides.
+
+    Parameters
+    ----------
+    old_rule : pysb.Rule
+        The rule to inherit from
+    new_lhs : pysb.Expression
+        The new left-hand side.
+    new_rhs : pysb.Expression
+        The new right-hand side.
+    name : string or None
+        Name for the new rule. If None then the name of the old rule is used.
+    '''
     rule = old_rule
     rexp = rule.rule_expression
     rexp_ = new_lh <> new_rh if rexp.is_reversible else new_lh >> new_rh
@@ -240,6 +284,11 @@ def parse_reaction_network(rn):
     Parses a BNGL-generated reaction network into a multiset of edges.
     Useful because the ordering of species and reactions might be different
     althoug the models are equivalent.
+
+    Parameters
+    ----------
+    rn : string
+        A string representing BNG reaction network.
     '''
     # ignore parameters for now
     lines = rn.split('\n')
@@ -264,6 +313,15 @@ def parse_reaction_network(rn):
 
 
 def reaction_network(m):
+    '''
+    Call BNG to construct the reaction network of the model.
+    The resulting network is then parsed.
+
+    Parameters
+    ----------
+    m : pysb.Model
+        Model from which the reaction net is to be constructed.
+    '''
     return parse_reaction_network(bng.generate_network(m))
 
 
@@ -296,6 +354,14 @@ def dfs(model, up_to_cee=False):
     syntactic operations. Two models are considered equivalent if they
     generate the same reaction network.
     Returns a model that cannot be further simplified by syntactic operations.
+
+    Parameters
+    ----------
+    model : pysb.Model
+        Initial model.
+    up_to_cee : bool
+        If True, then it performes only bidirectional merging and context
+        enumeration elimination.
     '''
     # fast, finds one fix point
     sort_key = get_rule_sort_key(model)
@@ -315,6 +381,14 @@ def dfs(model, up_to_cee=False):
 
 
 def copy_no_rules(model):
+    '''
+    Copies a model without rules.
+
+    Parameters
+    ----------
+    model : pysb.Model
+        Model to copy.
+    '''
     m = Model(_export=False)
     for comp in model.all_components():
         if comp.__class__ is not Rule:
@@ -385,12 +459,6 @@ def bng_simulate(model, times, method='ode', output_dir='/tmp', cleanup=True):
                                        p_err.rstrip())
 
         output_arr = _parse_bng_outfile(gdat_filename)
-        #ssa_file = open(ssa_filename, 'r')
-        #output.write(ssa_file.read())
-        #net_file.close()
-        #if append_stdout:
-        #    output.write("#\n# BioNetGen execution log follows\n# ==========")
-        #    output.write(re.sub(r'(^|\n)', r'\n# ', p_out))
     finally:
         if cleanup:
             for filename in [bng_filename, gdat_filename,

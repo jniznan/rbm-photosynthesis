@@ -1,5 +1,5 @@
-Rule-based modeling in photosynthesis
-=====================================
+Rule-based modelling in photosynthesis
+======================================
 
 `Some charts <http://nbviewer.ipython.org/github/jniznan/rbm-photosynthesis/blob/master/charts.ipynb>`_
 
